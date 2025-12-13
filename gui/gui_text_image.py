@@ -18,7 +18,7 @@ os.environ['SPCONV_ALGO'] = 'native'        # Can be 'native' or 'auto', default
                                             # Recommended to set to 'native' if run only once.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from trellis.pipelines import TrellisTextTo3DPipeline, TrellisImageTo3DPipeline
+from trellis.pipelines import TrellisTextTo3DPipeline
 from trellis.utils import postprocessing_utils
 
 RESOLUTION = 32
