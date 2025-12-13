@@ -59,6 +59,11 @@ To start the web-based interactive demo:
 python gui/gui_text_image.py
 ```
 
+## 🙏 Acknowledgments
+
+We would like to thank the authors of [TRELLIS](https://github.com/microsoft/TRELLIS) for their fantastic work and for making their code available. Their contributions have been invaluable to this project.
+
+
 ## 📜 Citation
 
 If you find this work helpful, please consider citing our paper:
