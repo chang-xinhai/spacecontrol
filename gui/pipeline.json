@@ -8,7 +8,8 @@
             "slat_decoder_gs": "microsoft/TRELLIS-image-large/ckpts/slat_dec_gs_swin8_B_64l8gs32_fp16",
             "slat_decoder_rf": "microsoft/TRELLIS-image-large/ckpts/slat_dec_rf_swin8_B_64l8r16_fp16",
             "slat_decoder_mesh": "microsoft/TRELLIS-image-large/ckpts/slat_dec_mesh_swin8_B_64l8m256c_fp16",
-            "slat_flow_model": "microsoft/TRELLIS-text-xlarge/ckpts/slat_flow_txt_dit_XL_64l8p2_fp16"
+            "slat_flow_model_text": "microsoft/TRELLIS-text-xlarge/ckpts/slat_flow_txt_dit_XL_64l8p2_fp16",
+            "slat_flow_model_image": "microsoft/TRELLIS-image-large/ckpts/slat_flow_img_dit_L_64l8p2_fp16"
         },
         "sparse_structure_sampler": {
             "name": "FlowEulerGuidanceIntervalSampler",
@@ -56,6 +57,7 @@
                 2.684523105621338
             ]
         },
-        "text_cond_model": "openai/clip-vit-large-patch14"
+        "text_cond_model": "openai/clip-vit-large-patch14",
+        "image_cond_model": "dinov2_vitl14_reg"
     }
 }

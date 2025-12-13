@@ -1,20 +1,15 @@
 import numpy as np
 from plyfile import (PlyData, PlyElement)
 import os
-import pandas as pd
 import viser
 import viser.transforms as tf
 import time
 import open3d as o3d
-import trimesh
 from utils import merge_meshes
-import ast
-import yaml
 import copy
 from PIL import Image
 from io import BytesIO
 
-RESOLUTION = 32
 
 import sys
 # os.environ['ATTN_BACKEND'] = 'xformers'   # Can be 'flash-attn' or 'xformers', default is 'flash-attn'
@@ -23,16 +18,32 @@ os.environ['SPCONV_ALGO'] = 'native'        # Can be 'native' or 'auto', default
                                             # Recommended to set to 'native' if run only once.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import imageio
 from trellis.pipelines import TrellisTextTo3DPipeline, TrellisImageTo3DPipeline
-from trellis.utils import render_utils, postprocessing_utils
-import dataset_toolkits.utils as utils
+from trellis.utils import postprocessing_utils
 
+RESOLUTION = 32
 pipeline = None
 generated_mesh = None
-
 steps = 12
 cfg_strength = 7.5
+
+scene_elements = {}
+gui_elements = {}
+superquadrics = {}
+active_superquadric = -1
+active_template_id = 1
+
+server = viser.ViserServer(up_axis=2)
+server.scene.set_up_direction([0.0, 0.0, 1.0])
+server.scene.set_environment_map('studio', background=False, environment_intensity=0.5)
+point_light = server.scene.add_light_ambient('light_a', color=(255, 255, 255), intensity=10000.0)
+
+server.gui.configure_theme(dark_mode=True)
+@server.on_client_connect
+def _(client: viser.ClientHandle) -> None:
+  client.camera.position = (0.8, -0.8, 0.8)
+  client.camera.look_at = (0., 0., 0.)
+
 
 def get_mesh_from_sq_param(scale, rot3x3, position, exps, N):
     vertices, triangles = add_superquadric_compact_rot_mat(scale, exps, position, rot3x3, N)
@@ -154,36 +165,26 @@ def generate(superquadrics, text_prompt_handle, t0_idx, image_control=False) -> 
   center = (aabb[0] + aabb[1]) / 2
   scale = 1/((aabb[1] - aabb[0]).max())
 
-  for i, mesh in enumerate(meshes):
-    mesh.scale(scale, center)
-    mesh.translate(-center)
-    o3d.io.write_triangle_mesh(f"input_sq_{i}.ply", mesh)
-
   merged_mesh.translate(-center)
   merged_mesh.scale(scale, (0,0,0))
-  o3d.io.write_triangle_mesh("merged_mesh.ply", merged_mesh)
+  spatial_control_mesh_path = "gui/spatial_control_mesh.ply"
+  o3d.io.write_triangle_mesh(spatial_control_mesh_path, merged_mesh)
 
   global pipeline
   if pipeline is None:
-    pipeline = TrellisTextTo3DPipeline.from_pretrained("microsoft/TRELLIS-text-xlarge")
+    pipeline = TrellisTextTo3DPipeline.from_pretrained("gui")
     pipeline.cuda()
 
-  t0_idx_value = t0_idx.value
-  config = {
-    't0_idx': t0_idx_value,
-  }
-
-  with open('t0.yaml', 'w') as f:
-      yaml.dump(config, f, sort_keys=False)
   text_prompt = text_prompt_handle.value
+  image_prompt = None
   if image_control and len(image_prompt_handle.value.name) > 0:
     image_prompt = Image.open(BytesIO(image_prompt_handle.value.content))
-  else:
-    image_prompt = None
   
-  outputs = pipeline.run(text_prompt, seed=1, sparse_structure_sampler_params={
+  outputs = pipeline.run(text_prompt, image_prompt, seed=1, sparse_structure_sampler_params={
         "steps": steps,
         "cfg_strength": cfg_strength,
+        "t0_idx_value": t0_idx.value,
+        "spatial_control_mesh_path": spatial_control_mesh_path,
     })
 
   # video = render_utils.render_video(outputs['gaussian'][0], bg_color=(255, 255, 255), r=2)['color']
@@ -199,11 +200,9 @@ def generate(superquadrics, text_prompt_handle, t0_idx, image_control=False) -> 
   glb.export("sample.ply")
   glb.export("sample.glb")
 
-  # merged_mesh.scale(1/scale, (0,0,0))
-  # merged_mesh.translate(center)
   glb.apply_scale(1/scale)
-  glb.apply_translation(center)# bring to original scale and position before saving
-  save_assets(input_sq=merged_mesh, text_prompt=text_prompt, generated_glb=glb, t0=t0_idx_value)
+  glb.apply_translation(center) # bring to original scale and position before saving
+  save_assets(input_sq=merged_mesh, text_prompt=text_prompt, generated_glb=glb, t0=t0_idx.value)
 
   global generated_mesh
   generated_mesh = server.scene.add_mesh_trimesh("generated_mesh", mesh=glb, visible=True)
@@ -214,25 +213,6 @@ def generate(superquadrics, text_prompt_handle, t0_idx, image_control=False) -> 
   gui_elements[f'generate_button{suffix_cur}'].label = f"Generate{suffix_cur.replace('_', ' ')}"
   gui_elements[f'generate_button{suffix_cur}'].icon = viser.Icon.PLAYER_PLAY
   gui_elements[f'generate_button{suffix_cur}'].color = 'green'
-
-scene_elements = {}
-gui_elements = {}
-superquadrics = {}
-active_superquadric = -1
-active_template_id = 1
-
-server = viser.ViserServer(up_axis=2)
-server.scene.set_up_direction([0.0, 0.0, 1.0])
-server.scene.set_environment_map('studio', background=False, environment_intensity=0.5)
-# server.scene.add_light_hemisphere('hemiligth', sky_color=(255, 255, 255), ground_color=(255, 255, 255), intensity=1.0, position=(0, 0, -1))
-
-point_light = server.scene.add_light_ambient('light_a', color=(255, 255, 255), intensity=10000.0)
-
-server.gui.configure_theme(dark_mode=True)
-@server.on_client_connect
-def _(client: viser.ClientHandle) -> None:
-  client.camera.position = (0.8, -0.8, 0.8)
-  client.camera.look_at = (0., 0., 0.)
 
 
 def get_all_templates() -> list:
@@ -260,24 +240,6 @@ def setup_gui(server, superquadrics: dict) -> None:
   active_superquadric = -1
   server.gui.reset()
   server.scene.reset()
-  point_light = server.scene.add_light_point(
-        name="/control1/front",
-        color=(192, 255, 238),
-        intensity=2.0,
-        position=(0, -2.0, 0.5),
-    )
-  point_light = server.scene.add_light_point(
-        name="/control1/right",
-        color=(0, 0, 255),
-        intensity=2.0,
-        position=(1.0, 0.0, 0.5),
-    )
-  point_light = server.scene.add_light_point(
-        name="/control1/left",
-        color=(120, 255, 255),
-        intensity=2.0,
-        position=(-1.0, 0.0, 0.5),
-    )
 
   scene_elements = {}
   server.gui.set_panel_label("Superquadrics")
@@ -421,9 +383,7 @@ def add_superquadric(superquadrics: dict, superquadric_id: int, gui_elements: di
 
       if active_superquadric != superquadric_id:
         ha = scene_elements[f'sq_{superquadric_id}'].on_click(lambda _: sq_on_click(superquadric_id))
-      print(scene_elements[f'sq_{superquadric_id}']._impl.click_cb)
-      # scene_elements[f'sq_{superquadric_id}'].remove_click_callback('all')
-      # scene_elements[f'sq_{superquadric_id}'].remove_click_callback(ha)
+      # print(scene_elements[f'sq_{superquadric_id}']._impl.click_cb)
 
     create_mesh(superquadric_id, resolution)
 
@@ -471,7 +431,6 @@ def select_template(template_id: int) -> None:
   global active_template_id
   global superquadrics
   active_template_id = template_id
-  active_superquadric = 0
   input_path = os.path.join('gui/superquadrics/', f'{get_all_templates()[template_id]}_sq.npz')
 
   print(f"Loading superquadrics from {input_path}")
