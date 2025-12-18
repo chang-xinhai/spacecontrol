@@ -1,4 +1,7 @@
 gui/*.ply
+*.ply
+*.glb
+*/*.glb
 generated_assets
 
 # Byte-compiled / optimized / DLL files

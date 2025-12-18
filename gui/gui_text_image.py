@@ -276,7 +276,10 @@ def setup_gui(server, superquadrics: dict) -> None:
 
   gui_elements['generate_button'] = server.gui.add_button("Generate", color='green', icon=viser.Icon.PLAYER_PLAY, order=5)
   gui_elements['generate_button'].on_click(lambda _: generate(superquadrics, text_prompt, t0_idx))
-  
+
+  gui_elements['save_sq_button'] = server.gui.add_button("Save Template", color='gray', icon=viser.Icon.PLAYER_PLAY, order=1)
+  gui_elements['save_sq_button'].on_click(lambda _: save_superquadric_to_file(superquadrics, f'gui/superquadrics/{len(get_all_templates())}_sq.npz'))
+
   server.gui.add_folder("", expand_by_default=False, order=6)
 
   gui_elements['folder_image_conditioning'] = server.gui.add_folder("Optional image prompt (texture only)", order=7, expand_by_default=True)
@@ -424,6 +427,22 @@ def load_superquadric_from_file(file_path: str) -> list:
     superquadrics[k] = superquadric_dict
   return superquadrics
 
+
+def save_superquadric_to_file(superquadrics: dict, file_path: str) -> None:
+  scales = []
+  rotations = []
+  shapes = []
+  translations = []
+  for k in superquadrics.keys():
+    scales.append(superquadrics[k]['scale'])
+    rotations.append(superquadrics[k]['rotation'])
+    shapes.append(superquadrics[k]['shape'])
+    translations.append(superquadrics[k]['translation'])
+  np.savez(file_path,
+           scales=np.array(scales),
+           rotations=np.array(rotations),
+           shapes=np.array(shapes),
+           translations=np.array(translations))
 
 def select_template(template_id: int) -> None:
   global active_template_id
