@@ -19,7 +19,7 @@
 </p>
 <p align="center">
 <a href="">
-<img src="https://spacecontrol3d.github.io/images/teaser_2.jpg" alt="Logo" width="100%">
+<img src="https://spacecontrol3d.github.io/images/teaser.png" alt="Logo" width="100%">
 </a>
 </p>
 
@@ -74,9 +74,7 @@ python gui/gui_text_image.py
 ```
 
 ## 🙏 Acknowledgments
-
-We would like to thank the authors of [TRELLIS](https://github.com/microsoft/TRELLIS) for their fantastic work and for making their code available. Their contributions have been invaluable to this project.
-
+We thank the authors of [TRELLIS](https://github.com/microsoft/TRELLIS) for their excellent work and for making their code publicly available. We also gratefully acknowledge NVIDIA for their academic compute grant, which enabled the development of this method; these contributions were instrumental to the project.
 
 ## 📜 Citation
 
