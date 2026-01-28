@@ -84,7 +84,7 @@ If you find this work helpful, please consider citing our paper:
 @article{fedele2025spacecontrol,
   title   = {{SpaceControl: Introducing Test-Time Spatial Control to 3D Generative Modeling}},
   author  = {Elisabetta Fedele, Francis Engelmann, Ian Huang, Or Litany, Marc Pollefeys, Leonidas Guibas},
-  journal = {arXiv preprint arXiv:2512.05343},
-  year    = {2025}
+  journal = {International Conference on Learning Representations (ICLR)},
+  year    = {2026}
 }
 ```
