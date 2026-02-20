@@ -12,7 +12,9 @@ from io import BytesIO
 
 
 import sys
-# os.environ['ATTN_BACKEND'] = 'xformers'   # Can be 'flash-attn' or 'xformers', default is 'flash-attn'
+# Prefer xformers for GUI stability; users can still override externally.
+os.environ.setdefault('ATTN_BACKEND', 'xformers')
+os.environ.setdefault('SPARSE_ATTN_BACKEND', 'xformers')
 os.environ['SPCONV_ALGO'] = 'native'        # Can be 'native' or 'auto', default is 'auto'.
                                             # 'auto' is faster but will do benchmarking at the beginning.
                                             # Recommended to set to 'native' if run only once.

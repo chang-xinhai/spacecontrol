@@ -70,7 +70,16 @@ Generative methods for 3D assets have recently achieved remarkable progress, yet
 ## 💡 Usage
 To start the web-based interactive demo:
 ```sh
-python gui/gui_text_image.py
+ATTN_BACKEND=xformers SPARSE_ATTN_BACKEND=xformers python gui/gui_text_image.py
+```
+
+To run a headless local pipeline (no GUI) and save results to disk:
+```sh
+python scripts/local_generate.py \
+  --template gui/superquadrics/chair_sq.npz \
+  --prompt "a modern wooden chair" \
+  --formats mesh gaussian \
+  --save-glb
 ```
 
 ## 🙏 Acknowledgments
