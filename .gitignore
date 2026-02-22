@@ -4,6 +4,7 @@ gui/*.ply
 */*.glb
 generated_assets
 ckpt/
+res/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

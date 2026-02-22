@@ -42,8 +42,9 @@ class TrellisTextTo3DPipeline(Pipeline):
         self.sparse_structure_sampler_params = {}
         self.slat_sampler_params = {}
         self.slat_normalization = slat_normalization
+        self._image_cond_model_name = image_cond_model
+        self.image_cond_model_transform = None
         self._init_text_cond_model(text_cond_model)
-        self._init_image_cond_model(image_cond_model)
 
     @staticmethod
     def from_pretrained(path: str) -> "TrellisTextTo3DPipeline":
@@ -66,18 +67,33 @@ class TrellisTextTo3DPipeline(Pipeline):
 
         new_pipeline.slat_normalization = args['slat_normalization']
 
+        new_pipeline._image_cond_model_name = args['image_cond_model']
+        new_pipeline.image_cond_model_transform = None
         new_pipeline._init_text_cond_model(args['text_cond_model'])
-        new_pipeline._init_image_cond_model(args['image_cond_model'])
 
         return new_pipeline
+
+    def _resolve_model_path(self, name: str) -> str:
+        if name is None:
+            return name
+        candidate_paths = [
+            Path(name),
+            Path(__file__).resolve().parents[2] / name,
+            Path(__file__).resolve().parents[2] / "ckpt" / name,
+        ]
+        for candidate in candidate_paths:
+            if candidate.exists():
+                return str(candidate)
+        return name
     
     def _init_text_cond_model(self, name: str):
         """
         Initialize the text conditioning model.
         """
         # load model
-        model = CLIPTextModel.from_pretrained(name)
-        tokenizer = AutoTokenizer.from_pretrained(name)
+        resolved_name = self._resolve_model_path(name)
+        model = CLIPTextModel.from_pretrained(resolved_name, use_safetensors=False)
+        tokenizer = AutoTokenizer.from_pretrained(resolved_name)
         model.eval()
         model = model.cuda()
         self.text_cond_model = {
@@ -121,6 +137,8 @@ class TrellisTextTo3DPipeline(Pipeline):
         Returns:
             torch.Tensor: The encoded features.
         """
+        if 'image_cond_model' not in self.models:
+            self._init_image_cond_model(self._image_cond_model_name)
         if isinstance(image, torch.Tensor):
             assert image.ndim == 4, "Image tensor should be batched (B, C, H, W)"
         elif isinstance(image, list):
@@ -180,9 +198,6 @@ class TrellisTextTo3DPipeline(Pipeline):
         """        
         spatial_control = utils.voxelize_sq_francis(spatial_control_path).to(device=self.device)
         spatial_control_latent = self.models['sparse_structure_encoder'](spatial_control)
-        # Only for debugging:
-        utils.save_voxelgrid_as_ply(spatial_control[0, 0].cpu().numpy(), Path(spatial_control_path).parent / "spatial_control_voxlized.ply")
-        utils.save_voxelgrid_as_ply(spatial_control_latent[0].cpu().numpy(), Path(spatial_control_path).parent / "spatial_control_latent.ply")
         return spatial_control_latent
 
     def get_cond_text(self, prompt: List[str]) -> dict:
