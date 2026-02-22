@@ -7,6 +7,8 @@ import numpy as np
 from torchvision import transforms
 from PIL import Image
 import rembg
+import os
+from pathlib import Path
 from .base import Pipeline
 from . import samplers
 from ..modules import sparse as sp
@@ -71,7 +73,31 @@ class TrellisImageTo3DPipeline(Pipeline):
         """
         Initialize the image conditioning model.
         """
-        dinov2_model = torch.hub.load('facebookresearch/dinov2', name, pretrained=True)
+        repo_root = Path(__file__).resolve().parents[2]
+        hub_candidates = [
+            os.environ.get('DINOV2_HUB_DIR', ''),
+            str(Path.home() / '.cache/torch/hub/facebookresearch_dinov2_main'),
+            str(repo_root / 'ckpt/facebookresearch_dinov2_main'),
+        ]
+        hub_repo = next((p for p in hub_candidates if p and Path(p).exists()), None)
+        if hub_repo is None:
+            raise FileNotFoundError(
+                'Offline DINOv2 hub source not found. Set DINOV2_HUB_DIR or place source at ~/.cache/torch/hub/facebookresearch_dinov2_main'
+            )
+
+        ckpt_map = {
+            'dinov2_vitl14_reg': 'dinov2_vitl14_reg4_pretrain.pth',
+        }
+        ckpt_name = ckpt_map.get(name, f'{name}.pth')
+        ckpt_path = repo_root / 'ckpt' / 'facebook' / ckpt_name
+        if not ckpt_path.exists():
+            raise FileNotFoundError(f'Offline DINOv2 checkpoint not found: {ckpt_path}')
+
+        dinov2_model = torch.hub.load(hub_repo, name, source='local', pretrained=False)
+        state_dict = torch.load(str(ckpt_path), map_location='cpu')
+        if isinstance(state_dict, dict) and 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
+        dinov2_model.load_state_dict(state_dict, strict=True)
         dinov2_model.eval()
         self.models['image_cond_model'] = dinov2_model
         transform = transforms.Compose([
@@ -97,9 +123,14 @@ class TrellisImageTo3DPipeline(Pipeline):
             scale = min(1, 1024 / max_size)
             if scale < 1:
                 input = input.resize((int(input.width * scale), int(input.height * scale)), Image.Resampling.LANCZOS)
-            if getattr(self, 'rembg_session', None) is None:
-                self.rembg_session = rembg.new_session('u2net')
-            output = rembg.remove(input, session=self.rembg_session)
+            rembg_model_path = Path.home() / '.u2net' / 'u2net.onnx'
+            if rembg_model_path.exists():
+                if getattr(self, 'rembg_session', None) is None:
+                    self.rembg_session = rembg.new_session('u2net')
+                output = rembg.remove(input, session=self.rembg_session)
+            else:
+                # Fully offline fallback: skip automatic model download.
+                output = input.convert('RGBA')
         output_np = np.array(output)
         alpha = output_np[:, :, 3]
         bbox = np.argwhere(alpha > 0.8 * 255)

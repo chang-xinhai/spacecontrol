@@ -20,10 +20,40 @@
 # pip install /tmp/extensions/vox2seq --no-build-isolation
 
 
-export HF_ENDPOINT=https://hf-mirror.com
-hf download --no-force-download microsoft/TRELLIS-image-large --local-dir ckpt/microsoft/TRELLIS-image-large
-hf download --no-force-download microsoft/TRELLIS-text-xlarge --local-dir ckpt/microsoft/TRELLIS-text-xlarge
+# export HF_ENDPOINT=https://hf-mirror.com
+# hf download --no-force-download microsoft/TRELLIS-image-large --local-dir ckpt/microsoft/TRELLIS-image-large
+# hf download --no-force-download microsoft/TRELLIS-text-xlarge --local-dir ckpt/microsoft/TRELLIS-text-xlarge
 
-hf download --no-force-download openai/clip-vit-large-patch14 --local-dir ckpt/openai/clip-vit-large-patch14
+# hf download --no-force-download openai/clip-vit-large-patch14 --local-dir ckpt/openai/clip-vit-large-patch14
 
 # wget https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_reg4_pretrain.pth -O ./ckpt/facebook/dinov2_vitl14_reg4_pretrain.pth
+
+
+
+ATTN_BACKEND=xformers SPARSE_ATTN_BACKEND=xformers python gui/gui_text_image.py
+
+
+python scripts/local_generate.py \
+  --template gui/superquadrics/chair_sq.npz \
+  --prompt "a modern wooden chair" \
+  --formats mesh gaussian \
+  --save-glb
+
+
+python scripts/glb_to_canonical_alignment.py --input data/GSO_example/BEDROOM_NEO/model.glb
+
+python scripts/local_generate_mesh.py \
+  --template data/GSO_example/BEDROOM_NEO/model_canonical.ply \
+  --prompt "a modern bedroom" \
+  --image data/GSO_example/BEDROOM_NEO/images/026.png \
+  --formats mesh gaussian \
+  --save-glb
+
+
+python scripts/local_generate_pc.py \
+  --canonicalize-template \
+  --template data/GSO_example/BEDROOM_NEO/vggt/view_4/canonical/sparse/points.ply \
+  --prompt "a modern bedroom" \
+  --image data/GSO_example/BEDROOM_NEO/images/026.png \
+  --formats mesh gaussian \
+  --save-glb
