@@ -5,6 +5,7 @@ gui/*.ply
 generated_assets
 ckpt/
 res/
+data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -72,6 +72,11 @@ def main():
     parser.add_argument("--spconv-algo", type=str, default="native", choices=["native", "auto", "implicit_gemm"])
     parser.add_argument("--formats", nargs="+", default=["mesh"], choices=["mesh", "gaussian", "radiance_field"])
     parser.add_argument("--save-glb", action="store_true")
+    parser.add_argument("--t0-radius", type=float, default=2.0, help="Radius (in latent voxels) for adaptive t0 blending from known region to noise.")
+    parser.add_argument("--adaptive-t0-strength", type=float, default=0.8, help="Max blending strength for local t0 control in known/near-known regions.")
+    parser.add_argument("--adaptive-t0-sharpness", type=float, default=8.0, help="Temporal sharpness of local t0 transition; higher means harder switch.")
+    parser.add_argument("--adaptive-t0", action=argparse.BooleanOptionalAction, default=True, help="Enable adaptive local t0 schedule.")
+    parser.add_argument("--anchor-known-coords", action=argparse.BooleanOptionalAction, default=True, help="Force include known control voxels in decoded sparse occupancy coordinates.")
     args = parser.parse_args()
 
     os.environ["ATTN_BACKEND"] = args.attn_backend
@@ -128,6 +133,11 @@ def main():
             "steps": args.steps,
             "cfg_strength": args.cfg,
             "t0_idx_value": args.t0,
+            "t0_radius": args.t0_radius,
+            "adaptive_t0_strength": args.adaptive_t0_strength,
+            "adaptive_t0_sharpness": args.adaptive_t0_sharpness,
+            "adaptive_t0": args.adaptive_t0,
+            "anchor_known_coords": args.anchor_known_coords,
             "spatial_control_mesh_path": str(spatial_control_pc_path),
         },
         formats=args.formats,

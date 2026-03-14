@@ -49,6 +49,7 @@ python scripts/local_generate_mesh.py \
   --formats mesh gaussian \
   --save-glb
 
+source /etc/network_turbo
 
 python scripts/local_generate_pc.py \
   --canonicalize-template \

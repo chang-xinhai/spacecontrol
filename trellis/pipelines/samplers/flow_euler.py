@@ -112,19 +112,44 @@ class FlowEulerSampler(Sampler):
         t_pairs = list((t_seq[i], t_seq[i + 1]) for i in range(steps))
 
         if 'control' in kwargs:
-          control = kwargs['control']
-          t0 = t_seq[int(kwargs['t0_idx_value'])]
-          sample = noise * t0 + control * (1 - t0)
+            control = kwargs['control']
+            t0_idx = int(round(float(kwargs['t0_idx_value'])))
+            t0_idx = int(np.clip(t0_idx, 0, steps))
+            t0 = t_seq[t0_idx]
+            
+            if 'dist_map' in kwargs:
+                dist_map = kwargs['dist_map']
+                t0_radius = kwargs.get('t0_radius', 3.0)
+                t0_map = t0 + (1.0 - t0) * torch.clamp(dist_map / t0_radius, 0.0, 1.0)
+                t0_map = t0_map.to(device=noise.device, dtype=noise.dtype)
+                kwargs['t0_map'] = t0_map
+                sample = noise
+            else:
+                sample = noise * t0 + control * (1 - t0)
+                
         args = {'neg_cond': kwargs['neg_cond'],
                 'cfg_strength': kwargs['cfg_strength'],
-                'cfg_interval': kwargs['cfg_interval']}
+                'cfg_interval': kwargs['cfg_interval'] if 'cfg_interval' in kwargs else (0.0, 1.0)}
         ret = edict({"samples": None, "pred_x_t": [], "pred_x_0": []})
         for t, t_prev in tqdm(t_pairs, desc="Sampling", disable=not verbose):
-            if 'control' in kwargs and t > t0:
-              continue
+            if 'control' in kwargs and 't0_map' not in kwargs and t > t0:
+                continue
+                
             out = self.sample_once(model, sample, t, t_prev, cond, **args)
-            sample = out.pred_x_prev
-            ret.pred_x_t.append(out.pred_x_prev)
+            
+            if 'control' in kwargs and 't0_map' in kwargs:
+                t0_map = kwargs['t0_map']
+                adaptive_t0_strength = float(kwargs.get('adaptive_t0_strength', 0.9))
+                adaptive_t0_sharpness = float(kwargs.get('adaptive_t0_sharpness', 10.0))
+                adaptive_t0_sharpness = max(adaptive_t0_sharpness, 1e-6)
+                time_delta = (float(t_prev) - t0_map) * adaptive_t0_sharpness
+                mask = torch.sigmoid(time_delta) * adaptive_t0_strength
+                target_known = noise * t_prev + control * (1 - t_prev)
+                sample = mask * target_known + (1.0 - mask) * out.pred_x_prev
+            else:
+                sample = out.pred_x_prev
+                
+            ret.pred_x_t.append(sample)
             ret.pred_x_0.append(out.pred_x_0)
         ret.samples = sample
         return ret

@@ -299,6 +299,31 @@ class TrellisTextTo3DPipeline(Pipeline):
 
         return coords
 
+    def _append_known_sparse_coords(
+        self,
+        sampled_coords: torch.Tensor,
+        known_mask_16: torch.Tensor,
+        num_samples: int,
+    ) -> torch.Tensor:
+        """
+        Anchor decoded sparse coordinates with known occupied voxels from control mask.
+        """
+        if known_mask_16 is None:
+            return sampled_coords
+        known_xyz = torch.argwhere(known_mask_16[0, 0] > 0.5).int()
+        if known_xyz.numel() == 0:
+            return sampled_coords
+
+        known_list = []
+        for b in range(num_samples):
+            batch_col = torch.full((known_xyz.shape[0], 1), b, device=known_xyz.device, dtype=torch.int32)
+            known_list.append(torch.cat([batch_col, known_xyz], dim=1))
+        known_coords = torch.cat(known_list, dim=0)
+
+        merged = torch.cat([sampled_coords.int(), known_coords.int()], dim=0)
+        merged = torch.unique(merged, dim=0)
+        return merged
+
     def decode_slat(
         self,
         slat: sp.SparseTensor,
@@ -386,10 +411,35 @@ class TrellisTextTo3DPipeline(Pipeline):
         """
         cond_text = self.get_cond_text([prompt])
         torch.manual_seed(seed)
-        spatial_control_latent = self.encode_spatial_control(sparse_structure_sampler_params['spatial_control_mesh_path'])
-        cond_text = {**cond_text, 'control': spatial_control_latent}  
-        coords = self.sample_sparse_structure(cond_text, num_samples, sparse_structure_sampler_params)
+
+        sparse_params = dict(sparse_structure_sampler_params)
+        
+        spatial_control_mesh_path = sparse_params['spatial_control_mesh_path']
+        spatial_control_latent = self.encode_spatial_control(spatial_control_mesh_path)
+        cond_text = {**cond_text, 'control': spatial_control_latent}
+
+        known_mask_16 = None
+
+        if sparse_params.get('adaptive_t0', False):
+            import torch.nn.functional as F
+            from scipy.ndimage import distance_transform_edt
+            spatial_control_dense = utils.voxelize_sq_francis(spatial_control_mesh_path).to(device=self.device)
+            spatial_mask_16 = F.max_pool3d(spatial_control_dense.float(), kernel_size=4, stride=4)
+            known_mask_16 = (spatial_mask_16 > 0.5).float()
+            mask_np = spatial_mask_16.squeeze().cpu().numpy() > 0.5
+            dist_map = distance_transform_edt(mask_np == 0)
+            
+            sparse_params['dist_map'] = torch.from_numpy(dist_map).to(device=self.device, dtype=torch.float32).view(1, 1, 16, 16, 16)
+            sparse_params['adaptive_t0_strength'] = float(sparse_params.get('adaptive_t0_strength', 0.9))
+            sparse_params['adaptive_t0_sharpness'] = float(sparse_params.get('adaptive_t0_sharpness', 10.0))
+
+        coords = self.sample_sparse_structure(cond_text, num_samples, sparse_params)
+
+        if sparse_params.get('anchor_known_coords', False) and known_mask_16 is not None:
+            coords = self._append_known_sparse_coords(coords, known_mask_16, num_samples)
+        
         cond_text.pop('control')
+        sparse_params.pop('dist_map', None)
 
         if preprocess_image and image is not None:
           image = self.preprocess_image(image)
